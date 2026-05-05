@@ -817,7 +817,7 @@ Unfortunately, all deployments aren’t as smooth.
 
 
 /////
-let's look at it in a bit finer detail:
+let’s look at it in a bit finer detail:
 
 .States of the BIP9 deployment of relative lock time.
 [%autowidth,role="widetable"]
@@ -832,7 +832,7 @@ let's look at it in a bit finer detail:
 | STARTED | 2016-05-24 21:02 | 413280 | Stay in STARTED, because < 1916 (95%) of last 2016 blocks signal support for csv
 | STARTED | 2016-06-08 02:02 | 415296 | Stay in STARTED, because < 1916 (95%) of last 2016 blocks signal support for csv
 | *LOCKED_IN* | 2016-06-21 04:49 | 417312 | LOCKED_IN because the last retarget period has >= 1916 blocks supporting csv
-| *ACTIVE* | 2016-07-04 21:44 | 419328 | Active because it's exactly one retarget after LOCKED_IN
+| *ACTIVE* | 2016-07-04 21:44 | 419328 | Active because it’s exactly one retarget after LOCKED_IN
 |===
 /////
 
@@ -1086,6 +1086,68 @@ fork will be dropped. This will effectively cause 100% support because
 noncompliant blocks won’t count anymore, and the deployment will soon
 get `LOCKED_IN`.
 
+[[speedy-trial]]
+==== Speedy Trial: a hybrid in practice
+
+[.inbitcoin]
+.Taproot
+****
+Taproot is the largest soft fork since segwit. We’ll walk through what
+Taproot actually does in <<ch12>>. This subsection is about how it
+got deployed, not what it does.
+****
+
+The next non-trivial soft fork after segwit was _Taproot_, deployed
+in 2021. The community had four years of post-segwit reflection to
+draw on, and the deployment mechanism that came out of it is called
+_Speedy Trial_. It looks like a stripped-down BIP9:
+
+* _Short signaling window_. Three months instead of a year. If miners
+don’t lock it in inside that window, the deployment fails and can
+be re-attempted.
+
+* _Slightly lower 90% lock-in threshold_, applied per retarget period.
+The threshold is a bit lower than BIP9’s 95% to reduce the chance of
+a single large miner vetoing the upgrade.
+
+* _Mandatory delayed activation if locked in_. If lock-in happens
+during the signaling window, the rules activate at a fixed,
+pre-announced block height several months later. This gives wallets
+and exchanges a long, predictable runway.
+
+* _No automatic user-activation if miners don’t signal_. If miners
+fail to lock in, the deployment fails cleanly, and developers can
+ship a new release with adjusted parameters or a different mechanism
+entirely.
+
+[[fig1131]]
+.Speedy Trial’s state machine. The signaling window is short, the lock-in threshold is slightly lower than BIP9, and activation is delayed by a fixed offset.
+image::{imagedir}/11-31.svg[{full-width}]
+
+Taproot signaled overwhelmingly within its first retarget period and
+locked in. Activation followed several months later, at block height
+709632 in November 2021. There was no equivalent of BIP148, no
+competing fork, and no public drama.
+
+A few reasons it went so smoothly:
+
+* The technical change was less divisive than segwit. Taproot didn’t
+change the block-size accounting, and there was no parallel
+“Taproot2x” hard-fork proposal contesting it.
+
+* Speedy Trial is genuinely time-limited. A miner who wants to drag
+out the process has to come up with a new objection every three
+months, which is a much higher bar than refusing to flip a bit for
+a year.
+
+* User-activation tooling was ready. Several projects were prepared
+to ship a BIP8-style user-activated client if Speedy Trial failed.
+That option being on the table changed miner incentives.
+
+The deployment showed that the community had actually internalized the
+lessons from segwit: keep the proposal scoped, keep the timeline
+tight, and have a credible fall-back ready.
+
 === Recap
 
 This chapter has taught you about hard forks and soft forks, and how to
@@ -1138,6 +1200,12 @@ miners that support the upgrade) will start enforcing the rules anyway.
 A user-activated soft fork was used to deploy BIP16, p2sh, but it was
 done manually. Other than this, the community has no real-world
 experience with user-activated soft forks.
+
+The most recent non-trivial deployment, Taproot in 2021, used Speedy
+Trial—a short-window hybrid of BIP9 and BIP8 that activated cleanly
+with no chain split and no public drama. The mechanism is described
+in <<speedy-trial,Speedy Trial: a hybrid in practice>>; what Taproot
+itself does is the topic of <<ch12>>.
 
 === Exercises
 
@@ -1267,13 +1335,13 @@ If segwit not locked in before 2017-08-01, this BIP will be active
 active bit 1 is required. Other blocks will be dropped.
 
 BIP149:
-Sets service bit 5 "NODE_UAWITNESS".
-Deployed with BIP8 using "segwit" bit 1.
+Sets service bit 5 “NODE_UAWITNESS”.
+Deployed with BIP8 using “segwit” bit 1.
 start time: 2017-11-16
 timeout: 2018-07-04
 
 NYA (segwit2x):
-First signal intent with "NYA" in coinbase.
+First signal intent with “NYA” in coinbase.
 Then:
 BIP9 deployment of segwit
 bit: 4
