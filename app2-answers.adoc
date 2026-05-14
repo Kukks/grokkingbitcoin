@@ -699,15 +699,16 @@ software.
 p2wsh, the segwit-v0 outputs, use witness version `00`.)
 
 . A Schnorr signature is 64 bytes, fixed size. ECDSA signatures used
-in earlier output types are 70-72 bytes and variable-length, because
+in earlier output types are 71-73 bytes and variable-length, because
 they are DER-encoded.
 
-. The output key is a _tweak_ of the wallet’s internal public key:
-Q = P + t·G, where t is a 32-byte tweak derived from P alone (if no
-script tree) or from P combined with the merkle root of the script
-tree (if there are scripts). Calling it the “output key” rather than
-“the public key” makes the distinction clear. The wallet still has
-its internal key P; the chain only sees Q.
+. The output key is the result of _tweaking_ the wallet’s internal
+public key by a 32-byte value derived from the internal key alone
+(if no script tree) or from the internal key combined with the
+merkle root of the script tree (if there are scripts). Calling it
+the “output key” rather than “the public key” makes the distinction
+clear: the wallet still has its internal key P; the chain only sees
+the tweaked output key Q.
 
 . No. A single-key p2tr spend and a 2-of-3 MuSig2 p2tr spend that
 takes the key path are both, on chain, a 32-byte output key and a
@@ -721,12 +722,6 @@ made it awkward to compose with other operators. Second,
 `OP_CHECKSIGADD` composes naturally with `OP_IF`/`OP_ELSE` and lets
 the script writer count valid signatures explicitly, which is more
 flexible than a built-in m-of-n check.
-
-. There is no consensus limit on the number of leaves. The depth of
-the tree is also not limited by consensus. Practical wallets keep the
-depth modest because the merkle proof contributes to the spending
-witness’s size, but a tree with hundreds of leaves is entirely
-workable.
 
 . The `bc1p` prefix tells you it is a Taproot address. The `bc` is
 the human-readable part for mainnet (just like `bc1q` segwit
@@ -745,10 +740,10 @@ version byte, and the merkle proof showing leaf~B~ is in the tree.
 The verifier then:
 +
 .. Reconstructs the merkle root from leaf~B~ and the merkle proof.
-.. Recomputes the output key from P and the reconstructed merkle
-root: Q' = P + H(P, root)·G.
-.. Checks that Q' equals the actual output key Q in the spent
-output.
+.. Recomputes the output key by tweaking P with the hash of P
+combined with the reconstructed merkle root.
+.. Checks that the recomputed value equals the actual output key in
+the spent output.
 .. Executes the leaf~B~ script with the supplied witness values.
 +
 If all of those pass, the spend is valid. Notice that leaf~A~ and
