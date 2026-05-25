@@ -49,13 +49,17 @@ signature) and one or two outputs. Annotate "witness = one signature,
 nothing else" prominently. Style match figure 10-14. Aspect 800×280.
 
 ### 12-06 — Taproot script tree, two leaves
-A small merkle tree with two leaves (leaf~1~ "daughter alone after 1
-May 2027" and leaf~2~ "spouse emergency override"). Show:
-* the leaf hashes,
-* the merkle root,
+A small merkle tree with two leaves. Show the actual leaf scripts
+(now spelled out in the text):
+* leaf~1~ = `<1 may 2027> OP_CHECKLOCKTIMEVERIFY OP_DROP <K_daughter> OP_CHECKSIG`
+* leaf~2~ = `<K_spouse> OP_CHECKSIGVERIFY <K_attorney> OP_CHECKSIG`
+Then show:
+* each leaf hashed into a leaf hash (A and B),
+* A and B sorted + concatenated + hashed into the merkle root,
 * the internal key P,
-* the formula Q = P + H(P, root)·G,
-* the resulting output key Q.
+* the output key Q as the tweak of P with H(P, root) — describe it as
+  a tweak, do NOT print the elliptic-curve formula (the book treats
+  that as advanced/optional; the text deliberately avoids it).
 
 Use the merkle-tree visual language already established in Ch06.
 Aspect 800×360.
@@ -65,11 +69,13 @@ The same tree as 12-06, but now showing what gets revealed when
 leaf 1 is used to spend. The witness contains:
 * the values consumed by leaf 1 (your daughter's signature),
 * the leaf 1 script itself,
-* a control block with internal key P and the merkle proof for
-  leaf 1 (so the verifier can recompute the merkle root).
+* a control block, shown as its byte layout: 1 byte (leaf version +
+  parity), 32 bytes (internal key P), 32 bytes (leaf 2's hash B).
 
-Leaf 2 is greyed out / boxed off — emphasize that it is NOT
-revealed. Aspect 800×360.
+Show the verifier rebuilding the merkle root from leaf 1's hash (A)
+and the sibling hash (B) in the control block. Leaf 2's script is
+greyed out / boxed off — emphasize that only its hash B is revealed,
+not the script. Aspect 800×360.
 
 ### 12-08 — p2tr address format
 Match the visual language of figures 10-30 through 10-35

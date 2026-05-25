@@ -341,12 +341,52 @@ to do the transfer early. (Key path.)
 emergency. (Script path, leaf 2.)
 
 You and your daughter generate a shared internal key P
-(<<musig2-section>> shows how). Then you build a script tree with two
-leaves (<<fig1206>>).
+(<<musig2-section>> shows how). The two leaves are just scripts—the
+same kind we’ve written since <<ch05>>, except the keys are now
+32-byte x-only Schnorr keys. Leaf 1, the daughter-after-timelock
+path, is the familiar `OP_CHECKLOCKTIMEVERIFY` pattern from <<ch09>>:
+
+[subs="normal"]
+----
+<1 may 2027 00:00:00> OP_CHECKLOCKTIMEVERIFY OP_DROP <K~daughter~> OP_CHECKSIG
+----
+
+There’s no `OP_HASH160` here, unlike the p2pkh version in <<ch09>>;
+the leaf already spells out the key, so there’s nothing to hash.
+Leaf 2, the spouse-and-attorney emergency path, is a 2-of-2:
+
+[subs="normal"]
+----
+<K~spouse~> OP_CHECKSIGVERIFY <K~attorney~> OP_CHECKSIG
+----
+
+To turn these two leaves into a tree, you hash each leaf and then
+hash the pair together (<<fig1206>>):
+
+. Hash leaf 1 into a leaf hash, _A_.
+
+. Hash leaf 2 into a leaf hash, _B_.
+
+. Sort _A_ and _B_, concatenate them, and hash the result. That’s the
+_merkle root_.
 
 [[fig1206]]
-.A Taproot script tree with two leaves. The merkle root is the hash of the two leaves; the output key Q commits to both P and the merkle root.
+.A Taproot script tree with two leaves. Each leaf is hashed; the two hashes are sorted, concatenated, and hashed into the merkle root. The output key Q commits to both P and the merkle root.
 image::{imagedir}/12-06.svg[{big-width}]
+
+The sorting in step 3 matters: siblings are always placed in a fixed
+(lexicographic) order before being hashed together. That’s what lets
+a verifier recompute the root from a leaf and a proof without needing
+to know whether the leaf sat on the left or the right.
+
+[.inbitcoin]
+.Tagged hashes
+****
+The leaf and branch hashes aren’t plain SHA256; BIP340 and BIP341 use
+_tagged hashes_, which mix a fixed tag (like `TapLeaf` or `TapBranch`)
+into the hash so a leaf can never be confused with a branch. The
+details are in those BIPs.
+****
 
 The output key Q is computed by tweaking P with the hash of P
 combined with the merkle root of the tree. You send 100 bitcoins to
@@ -375,14 +415,26 @@ proof that leaf 1 belongs to the tree (<<fig1207>>).
 .Spending via leaf 1 reveals leaf 1 and a merkle proof, but not leaf 2. The verifier reconstructs the merkle root from the proof and checks that Q matches.
 image::{imagedir}/12-07.svg[{big-width}]
 
-The verifier reconstructs the merkle root from leaf 1 and the proof,
-recomputes Q from P and the reconstructed merkle root, and checks that
-the result matches the output key. Then it executes leaf 1’s script
-with the witness data on the stack, just like a p2wsh spend.
+The control block is where the merkle proof lives. For our two-leaf
+tree, spending via leaf 1 gives a control block of just 65 bytes:
 
-Notice that leaf 2 (the spouse’s emergency path) is never revealed. A
-blockchain analyst can’t tell that the output ever had an emergency
-override clause, much less who held it.
+----
+1 byte    leaf version + a parity bit (0xc0 or 0xc1)
+32 bytes  the internal key P
+32 bytes  leaf 2's hash, B (the merkle proof)
+----
+
+Leaf 2’s hash, _B_, is all the verifier needs to rebuild the root: it
+hashes the revealed leaf 1 into _A_, sorts _A_ and _B_, hashes them
+together, and gets the merkle root back. It then recomputes Q from P
+and that root and checks it matches the output key. Finally it runs
+leaf 1’s script with the witness data on the stack, just like a p2wsh
+spend. Each extra level of tree depth adds one more 32-byte sibling
+hash to the control block.
+
+Notice that leaf 2 (the emergency path) is never revealed—only its
+hash. A blockchain analyst can’t tell that the output ever had an
+emergency override clause, much less who held it.
 
 ===== The emergency path
 
@@ -422,16 +474,16 @@ that the new witness version made room for.
 
 The headline differences:
 
-* `OP_CHECKSIGADD` _replaces multisig_. Instead of `OP_CHECKMULTISIG`,
-which we covered in the Multiple signatures section of <<ch05>>,
-Tapscript adds a new operator `OP_CHECKSIGADD`. It takes a public
-key, a signature, and a counter on the stack; it adds 1 to the
-counter if the signature is valid for the key, or 0 otherwise. To
-express a 2-of-3 in Tapscript, you write three `OP_CHECKSIGADD`
-calls in a row and then check that the final counter is at least 2.
-This is more verbose than `OP_CHECKMULTISIG`, but it composes
-cleanly with `OP_IF`/`OP_ELSE` and avoids the historical “off-by-one”
-bug in `OP_CHECKMULTISIG`.
+* `OP_CHECKSIGADD` _replaces multisig_. `OP_CHECKMULTISIG`, which we
+covered in the Multiple signatures section of <<ch05>>, isn’t
+available in Tapscript. Instead, `OP_CHECKSIGADD` takes a public key,
+a counter, and a signature off the stack and adds 1 to the counter if
+the signature is valid, or 0 if the signature is an empty placeholder.
+You chain one `OP_CHECKSIG` and several `OP_CHECKSIGADD` together to
+count valid signatures, then compare the count to your threshold.
+This is more verbose than `OP_CHECKMULTISIG`, but it composes cleanly
+with `OP_IF`/`OP_ELSE` and avoids the historical “off-by-one” bug in
+`OP_CHECKMULTISIG`.
 
 * _The 201-op limit per script is gone_. Witness-v0 scripts could
 contain at most 201 non-push opcodes. Tapscript replaces that with a
@@ -454,6 +506,20 @@ once. We’ll look at it in detail in <<bip341-sighash>>.
 opcodes (`OP_SUCCESS80`, `OP_SUCCESS98`, and so on) are reserved for
 future upgrades; they make a script succeed unconditionally if they
 appear, which lets future soft forks tighten them.
+
+Here’s the charity’s 2-of-3 from <<ch05>> written as a single
+Tapscript leaf, with John’s, Faiza’s, and Ellen’s keys:
+
+[subs="normal"]
+----
+<K~J~> OP_CHECKSIG <K~F~> OP_CHECKSIGADD <K~E~> OP_CHECKSIGADD OP_2 OP_NUMEQUAL
+----
+
+The spender supplies a signature for each key that signs and an empty
+placeholder for each key that doesn’t. `OP_CHECKSIG` checks John’s key
+and leaves a 0 or 1 on the stack; each `OP_CHECKSIGADD` adds the next
+key’s result to that running count. `OP_2 OP_NUMEQUAL` then passes
+only if exactly two of the three signatures were valid.
 
 The combined effect of MAST plus the lifted limits is that contract
 designs that simply didn’t fit on Bitcoin before now do. A contract
